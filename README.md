@@ -16,7 +16,7 @@ To use it as both source and sink, simply create a Schema:
 
 
 ```java
-import com.clojurewerkz.cascading.mongodb.MongoDBScheme;
+import com.clojurewerkz.cascading.mongodb.MongoTupleScheme;
 import com.clojurewerkz.cascading.mongodb.MongoDBTap;
 
 import java.util.List;

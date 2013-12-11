@@ -1,4 +1,5 @@
 (ns com.clojurewerkz.cascading.mongodb.core-test
+  (:import [com.clojurewerkz.cascading.mongodb MongoTupleScheme MongoTupleScheme])
   (:use cascalog.api
         clojure.test
         [midje sweet cascalog])

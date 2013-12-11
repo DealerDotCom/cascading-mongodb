@@ -3,7 +3,6 @@ package com.clojurewerkz.cascading.mongodb;
 import java.io.IOException;
 
 import cascading.tuple.TupleEntryCollector;
-import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.OutputCollector;
@@ -11,21 +10,16 @@ import org.apache.hadoop.mapred.OutputCollector;
 import cascading.flow.FlowProcess;
 import cascading.tap.Tap;
 import cascading.tap.hadoop.io.HadoopTupleEntrySchemeIterator;
-import cascading.tap.hadoop.io.RecordReaderIterator;
 import cascading.tuple.TupleEntryIterator;
-import cascading.tuple.TupleEntrySchemeIterator;
-
-import com.mongodb.hadoop.io.BSONWritable;
-import com.mongodb.hadoop.util.MongoConfigUtil;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class MongoDBTap extends Tap<JobConf, RecordReader, OutputCollector> {
 
   public final String id = "TEMP_ID";
 
-  public MongoDBScheme scheme;
+  public MongoScheme scheme;
 
-  public MongoDBTap(MongoDBScheme scheme) {
+  public MongoDBTap(MongoScheme scheme) {
     super(scheme);
     this.scheme = scheme;
   }

@@ -1,24 +1,20 @@
 package com.clojurewerkz.cascading.mongodb;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import cascading.tuple.FieldsResolverException;
 import cascading.tuple.TupleEntry;
+import com.mongodb.DBObject;
 import com.mongodb.MongoURI;
 import com.mongodb.hadoop.mapred.MongoOutputFormat;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.fs.Path;
 
-import org.apache.hadoop.util.StringUtils;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import cascading.flow.FlowProcess;
-import cascading.scheme.Scheme;
 import cascading.scheme.SinkCall;
 import cascading.scheme.SourceCall;
 import cascading.tap.Tap;
@@ -30,7 +26,7 @@ import com.mongodb.hadoop.mapred.MongoInputFormat;
 import com.mongodb.hadoop.util.MongoConfigUtil;
 
 @SuppressWarnings("rawtypes")
-public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector, BSONWritable[], BSONWritable[]> {
+public class MongoTupleScheme extends MongoScheme {
 
   /**
    * Field logger
@@ -38,22 +34,37 @@ public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector
   private static final Logger logger = LoggerFactory.getLogger(MongoDbCollector.class);
 
   private String pathUUID;
-  public String mongoUri;
-  public List<String> columnFieldNames;
-  public Map<String, String> fieldMappings;
-  public String keyColumnName;
+  private String mongoUri;
+  private String mongoAuthUri;
+  private List<String> columnFieldNames;
+  private Map<String, String> fieldMappings;
+  private String keyColumnName;
 
   private String host;
   private Integer port;
   private String database;
   private String collection;
 
-  public MongoDBScheme(String host, Integer port, String database, String collection, List<String> columnFieldNames, Map<String, String> fieldMappings) {
-    this(host, port, database, collection, "_id", columnFieldNames, fieldMappings);
+  private Map<String, Object> query = null;
+
+  public MongoTupleScheme(String host, Integer port, String database, String collection, List<String> columnFieldNames, Map<String, String> fieldMappings) {
+    this(host, port, database, collection, "_id", columnFieldNames, fieldMappings, null);
   }
 
-  public MongoDBScheme(String host, Integer port, String database, String collection, String keyColumnName, List<String> columnFieldNames, Map<String, String> fieldMappings) {
-    this.mongoUri = String.format("mongodb://%s:%d/%s.%s", host, port, database, collection);
+  public MongoTupleScheme(String host, Integer port, String database, String collection, String keyColumnName, List<String> columnFieldNames, Map<String, String> fieldMappings, Map<String, Object> query) {
+      this(host,port,null,null,database,collection,keyColumnName,columnFieldNames,fieldMappings,query);
+  }
+
+  public MongoTupleScheme(String host, Integer port, String username, String password, String database, String collection, String keyColumnName, List<String> columnFieldNames, Map<String, String> fieldMappings, Map<String, Object> query) {
+
+    if(username != null && password != null){
+        //this.mongoAuthUri = String.format("mongodb://%s:%s@%s:%d/%s.%s", username, password, host, port, database, collection);
+        this.mongoAuthUri = String.format("mongodb://%s:%s@%s:%d/%s", username, password, host, port, "admin");
+        this.mongoUri =     String.format("mongodb://%s:%s@%s:%d/%s.%s", username, password, host, port, database, collection);
+    }else{
+        this.mongoUri = String.format("mongodb://%s:%d/%s.%s", host, port, database, collection);
+    }
+
     this.pathUUID = UUID.randomUUID().toString();
     this.columnFieldNames = columnFieldNames;
     this.fieldMappings = fieldMappings;
@@ -63,25 +74,14 @@ public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector
     this.port = port;
     this.database = database;
     this.collection = collection;
-  }
-
-  public MongoDBScheme(String host, Integer port, String username, String password, String database, String collection, String keyColumnName, List<String> columnFieldNames, Map<String, String> fieldMappings) {
-    this.mongoUri = String.format("mongodb://%s:%s@%s:%d/%s.%s", username, password, host, port, database, collection);
-    this.pathUUID = UUID.randomUUID().toString();
-    this.columnFieldNames = columnFieldNames;
-    this.fieldMappings = fieldMappings;
-    this.keyColumnName = keyColumnName;
-
-    this.host = host;
-    this.port = port;
-    this.database = database;
-    this.collection = collection;
+    this.query = query;
   }
 
   /**
    *
    * @return
    */
+  @Override
   public Path getPath() {
     return new Path(pathUUID);
   }
@@ -90,6 +90,7 @@ public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector
    *
    * @return
    */
+  @Override
   public String getIdentifier() {
     return String.format("%s_%d_%s_%s", this.host, this.port, this.database, this.collection);
   }
@@ -102,14 +103,38 @@ public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector
    */
   @Override
   public void sourceConfInit(FlowProcess<JobConf> process, Tap<JobConf, RecordReader, OutputCollector> tap, JobConf conf) {
-    MongoConfigUtil.setReadSplitsFromShards(conf, true);
-    MongoConfigUtil.setInputURI( conf, new MongoURI(this.mongoUri) );
-    FileInputFormat.setInputPaths(conf, this.getIdentifier());
-    conf.setInputFormat(MongoInputFormat.class);
+      MongoConfigUtil.setReadSplitsFromShards(conf, true);
 
-    // TODO: MongoConfigUtil.setFields(conf, fieldsBson);
-    // TODO: MongoConfigUtil.setQuery(conf, q);
-    // TODO: MongoConfigUtil.setFields(conf, fields);
+      MongoConfigUtil.setInputURI( conf, new MongoURI(this.mongoUri) );
+      if(this.mongoAuthUri != null){
+          MongoConfigUtil.setAuthURI( conf, mongoAuthUri );
+      }
+
+      FileInputFormat.setInputPaths(conf, this.getIdentifier());
+      conf.setInputFormat(MongoInputFormat.class);
+
+      // TODO: MongoConfigUtil.setFields(conf, fieldsBson);
+      if(this.columnFieldNames != null){
+          DBObject fields = new BasicDBObject();
+          for(String fieldName: this.columnFieldNames){
+              fields.put(fieldName, 1);
+          }
+          MongoConfigUtil.setFields(conf, fields);
+      }
+
+      // TODO: MongoConfigUtil.setQuery(conf, q);
+      if(this.query != null){
+          MongoConfigUtil.setQuery(conf, new BasicDBObject(query));
+      }
+
+
+      //TODO make this configurable
+      MongoConfigUtil.setCreateInputSplits(conf, true);
+      MongoConfigUtil.setReadSplitsFromSecondary(conf, true);
+      MongoConfigUtil.setSplitSize(conf, 2048);
+
+
+      // TODO: MongoConfigUtil.setFields(conf, fields);
   }
 
   /**
@@ -119,12 +144,15 @@ public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector
    * @param conf
    */
   @Override
-  public void sinkConfInit(FlowProcess<JobConf> process, Tap<JobConf, RecordReader, OutputCollector> tap,
-                           JobConf conf) {
-    conf.setOutputFormat(MongoOutputFormat.class);
-    MongoConfigUtil.setOutputURI(conf, this.mongoUri);
+  public void sinkConfInit(FlowProcess<JobConf> process, Tap<JobConf, RecordReader, OutputCollector> tap, JobConf conf) {
+      conf.setOutputFormat(MongoOutputFormat.class);
 
-    FileOutputFormat.setOutputPath(conf, getPath());
+      MongoConfigUtil.setOutputURI(conf, this.mongoUri);
+      if(this.mongoAuthUri != null){
+          MongoConfigUtil.setAuthURI( conf, mongoAuthUri );
+      }
+
+      FileOutputFormat.setOutputPath(conf, getPath());
   }
 
   /**
@@ -160,7 +188,7 @@ public class MongoDBScheme extends Scheme<JobConf, RecordReader, OutputCollector
     }
 
     for (String columnFieldName : columnFieldNames) {
-      Object tupleEntry= value.get(columnFieldName);
+      Object tupleEntry= value.getDoc().get(columnFieldName);
       if (tupleEntry != null) {
         result.add(tupleEntry);
       } else if (columnFieldName != this.keyColumnName) {

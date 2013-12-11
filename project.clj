@@ -1,25 +1,33 @@
-(defproject com.clojurewerkz/cascading-mongodb "0.0.5-SNAPSHOT"
+(defproject com.clojurewerkz/cascading-mongodb "0.0.5-ddc-SNAPSHOT"
   :description "Cascading MongoDB Tap"
   :url "http://github.com/ifesdjeen/cascading-mongodb"
   :min-lein-version "2.0.0"
-  :dependencies [[org.mongodb/mongo-hadoop-streaming "1.1.0-SNAPSHOT"]
-                 ;; [mongo-hadoop-streaming_cdh3u3  "1.0.0-rc0"]
-                 [org.mongodb/mongo-hadoop-core_cdh3u3 "1.0.0"]
-                 [log4j/log4j "1.2.17"]]
+
   :java-source-paths ["src/main/java"]
   :test-paths        ["src/main/test"]
+
+  :dependencies [#_[org.mongodb/mongo-hadoop-streaming "1.1.0-SNAPSHOT"]
+                 ;; [mongo-hadoop-streaming_cdh3u3  "1.0.0-rc0"]
+
+
+                 [log4j/log4j "1.2.17"]]
+
+
   :profiles {:dev {:resource-paths     ["src/resources"]
                    :dependencies [[org.clojure/clojure "1.4.0"]
                                   [com.novemberain/monger "1.2.0"]
                                   [cascalog "1.10.0"]
-                                  [midje "1.3.0" :exclude [org.clojure/clojure]]
-                                  [midje-cascalog "0.4.0" :exclude [org.clojure/clojure]]]}
-             :provided {:dependencies [[org.apache.hadoop/hadoop-core "0.20.2-cdh3u3"]
+                                  [midje "1.3.0" :exclusions [org.clojure/clojure]]
+                                  [midje-cascalog "0.4.0" :exclusions [org.clojure/clojure]]]}
+             :provided {:dependencies [[org.apache.hadoop/hadoop-core "0.20.2-cdh3u3" :exclusions [commons-logging]]
                                        [cascading/cascading-core "2.0.2"]
-                                       [cascading/cascading-hadoop "2.0.2"]]}}
+                                       [org.mongodb/mongo-hadoop-core_cdh3u3 "1.2.0-rc0" :exclusions [commons-logging commons-lang]]
+                                       [cascading/cascading-hadoop "2.0.2" :exclusions [org.apache.hadoop/hadoop-core]]]}}
   :test-selectors {:all     (constantly true)
                    :focus   :focus
                    :default (constantly true)}
-  :javac-options   ["-target" "1.6" "-source" "1.6"]
+
+  :javac-options   ["-target" "1.6" "-source" "1.6" "-Xlint:deprecation"]
+
   :repositories {"conjars" "http://conjars.org/repo/"
                  "cloudera" {:url "https://repository.cloudera.com/artifactory/cloudera-repos"}})
